@@ -1,0 +1,47 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+coverage/
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+playwright-report/
+test-results/
+backend/.env
+frontend/.env.local
+.docker/
+
+# Local databases, dumps, logs, and runtime state
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.dump
+*.backup
+postgres-data/
+*.log
+*.pid
+
+# Private keys and local credentials
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets/
+
+# Editor and OS metadata
+.DS_Store
+.idea/
+.vscode/
+
