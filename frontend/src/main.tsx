@@ -10,7 +10,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1 } } })
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><ErrorBoundary><QueryClientProvider client={queryClient}><BrowserRouter>
+  <React.StrictMode><ErrorBoundary><QueryClientProvider client={queryClient}><BrowserRouter basename={import.meta.env.BASE_URL}>
     <AuthProvider><App /></AuthProvider>
   </BrowserRouter></QueryClientProvider></ErrorBoundary></React.StrictMode>,
 )
