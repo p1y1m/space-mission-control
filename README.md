@@ -192,12 +192,15 @@ Interactive schemas and exact response models are available at `/docs` and `/ope
 
 ## Deployment
 
+For the exact free-tier procedure and cost guardrails, see the
+[deployment runbook](docs/DEPLOYMENT.md).
+
 ### Backend and database
 
 1. Create a Neon PostgreSQL project and copy its pooled TLS URL.
 2. Create the Render service from `render.yaml`.
-3. Set `DATABASE_URL`, an exact `CORS_ORIGINS` GitHub Pages URL, and `COOKIE_SECURE=true`.
-4. Render's pre-deploy command applies `alembic upgrade head`; its health probe uses `/health`.
+3. Set the secret `DATABASE_URL`; the Blueprint supplies the exact CORS origin and secure-cookie settings.
+4. The free-tier container startup applies `alembic upgrade head`; Render probes `/health`.
 
 ### Frontend
 

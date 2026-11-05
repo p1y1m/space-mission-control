@@ -2,17 +2,20 @@ services:
   - type: web
     name: space-mission-control-api
     runtime: docker
+    plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /health
-    preDeployCommand: alembic upgrade head
+    autoDeployTrigger: checksPass
     envVars:
       - key: DATABASE_URL
         sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        sync: false
+        value: https://p1y1m.github.io
       - key: COOKIE_SECURE
         value: "true"
+      - key: ENVIRONMENT
+        value: production
 
