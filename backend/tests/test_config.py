@@ -1,3 +1,5 @@
+import pytest
+
 from app.config import Settings
 
 
@@ -15,3 +17,22 @@ def test_explicit_driver_and_sqlite_urls_are_preserved():
 
     assert postgres.database_url == "postgresql+psycopg://user:password@example.test/app"
     assert sqlite.database_url == "sqlite:///./local.db"
+
+
+def test_vercel_configuration_requires_secure_production_values():
+    with pytest.raises(ValueError, match="Invalid Vercel configuration"):
+        Settings(vercel="1")
+
+    configured = Settings(
+        vercel="1",
+        database_url="postgresql://user:password@example.test/app?sslmode=require",
+        secret_key="a-random-production-secret-that-is-long-enough",
+        cookie_secure=True,
+        cors_origins="https://p1y1m.github.io",
+    )
+    assert configured.is_serverless is True
+    assert configured.database_url.endswith("?sslmode=require")
+
+
+def test_local_configuration_is_not_serverless():
+    assert Settings(vercel=None).is_serverless is False

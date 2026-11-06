@@ -13,6 +13,9 @@ def test_registration_login_and_invalid_credentials(client):
     response = register(client)
     assert response.json()["email"] == "pilot@example.com"
     assert "password" not in response.text
+    assert response.headers["X-CSRF-Token"] == client.cookies.get("smc_csrf")
+    refreshed = client.get("/api/v1/auth/me")
+    assert refreshed.headers["X-CSRF-Token"] == client.cookies.get("smc_csrf")
     client.cookies.clear()
     assert client.post("/api/v1/auth/login", json={"email": "pilot@example.com", "password": "wrong"}).status_code == 401
     assert client.post("/api/v1/auth/login", json={"email": "pilot@example.com", "password": "strong-password-123"}).status_code == 200
@@ -62,6 +65,21 @@ def test_validation_and_csrf(auth_client):
     assert auth_client.post("/api/v1/missions", json={"name": "x"}).status_code == 422
     auth_client.headers["X-CSRF-Token"] = "invalid"
     assert auth_client.post("/api/v1/watchlist", json={"satellite_id": 1}).status_code == 403
+
+
+def test_csrf_header_is_exposed_to_allowed_frontend_origin(client):
+    response = client.post(
+        "/api/v1/auth/register",
+        headers={"Origin": "http://localhost:5173"},
+        json={
+            "email": "cors@example.com",
+            "display_name": "CORS Pilot",
+            "password": "strong-password-123",
+        },
+    )
+    assert response.status_code == 201
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert "X-CSRF-Token" in response.headers["access-control-expose-headers"]
 
 
 def test_tle_parser_and_sgp4_propagation():

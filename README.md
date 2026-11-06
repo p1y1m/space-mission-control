@@ -43,14 +43,14 @@ Screenshots are intentionally not committed until generated from a running local
 | Security | Argon2, signed JWT session cookies, double-submit CSRF, CORS controls |
 | Database | PostgreSQL 16 locally; Neon-compatible in production |
 | Quality | Pytest, Vitest, React Testing Library, Playwright, ESLint |
-| Delivery | Docker Compose, GitHub Actions, GitHub Pages, Render blueprint |
+| Delivery | Docker Compose, GitHub Actions, GitHub Pages, Vercel Functions |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     U[Operator browser] -->|HTTPS static assets| GH[GitHub Pages\nReact + Vite]
-    GH -->|REST + credentials + CSRF| API[Render\nFastAPI service]
+    GH -->|REST + credentials + CSRF| API[Vercel Hobby\nFastAPI function]
     API -->|SQLAlchemy / TLS| DB[(Neon PostgreSQL)]
     API -. optional refresh .-> CT[CelesTrak public catalog]
     API --> LOG[Structured logs / health probe]
@@ -198,13 +198,13 @@ For the exact free-tier procedure and cost guardrails, see the
 ### Backend and database
 
 1. Create a Neon PostgreSQL project and copy its pooled TLS URL.
-2. Create the Render service from `render.yaml`.
-3. Set the secret `DATABASE_URL`; the Blueprint supplies the exact CORS origin and secure-cookie settings.
-4. The free-tier container startup applies `alembic upgrade head`; Render probes `/health`.
+2. Import this repository into Vercel Hobby with `backend` as the project Root Directory.
+3. Configure the Neon pooled `DATABASE_URL`, a random `SECRET_KEY`, the exact CORS origin, and secure cookies.
+4. Vercel's build hook applies `alembic upgrade head`; serverless cold starts never run migrations.
 
 ### Frontend
 
-1. In GitHub repository variables, set `VITE_API_URL=https://<render-host>/api/v1`.
+1. In GitHub repository variables, set `VITE_API_URL=https://<vercel-host>/api/v1`.
 2. Enable GitHub Pages with **GitHub Actions** as the source.
 3. Run the “Deploy Frontend to GitHub Pages” workflow.
 4. Update `vite.config.ts` if the repository name is not `space-mission-control`.
@@ -215,8 +215,8 @@ created and no deployment credentials are stored in this repository.
 ## Security and monitoring
 
 See [security guidance](docs/SECURITY.md) and [monitoring/runbook](docs/MONITORING.md). The important
-production limitations are the per-process authentication rate limiter, no managed alerting in the
-repository, and cookie behavior that must be verified against the final GitHub Pages/Render domains.
+production limitations are the per-instance authentication rate limiter, no managed alerting in the
+repository, and cookie behavior that must be verified against the final GitHub Pages/Vercel domains.
 
 ## Engineering competencies demonstrated
 
@@ -228,7 +228,7 @@ repository, and cookie behavior that must be verified against the final GitHub P
   defensive configuration.
 - Unit, integration, component, and browser test layers with PostgreSQL-backed CI.
 - Container orchestration, environment separation, CI quality gates, static frontend hosting, and
-  managed API/database deployment design.
+  serverless API/database deployment design.
 
 ## Trade-offs and future work
 

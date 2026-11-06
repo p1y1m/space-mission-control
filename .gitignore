@@ -20,6 +20,7 @@ test-results/
 backend/.env
 frontend/.env.local
 .docker/
+.vercel/
 
 # Local databases, dumps, logs, and runtime state
 *.db

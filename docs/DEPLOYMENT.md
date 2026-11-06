@@ -1,75 +1,89 @@
 # Free-tier deployment runbook
 
-This runbook deploys the existing frontend on GitHub Pages, PostgreSQL on Neon, and the FastAPI
-container on Render. It intentionally creates no Render database, persistent disk, worker, or paid
-compute resource.
+This runbook keeps the React frontend on GitHub Pages, PostgreSQL on Neon Free, and deploys the
+FastAPI backend as a Vercel Hobby project. Following it creates no paid resource. The repository is
+prepared for deployment, but no deployment is performed automatically.
 
-## Cost guardrails
+## Cost and secret guardrails
 
-- Keep the Neon project on **Free**.
-- Keep the Render workspace on **Hobby** and the web service on the **Free** instance type.
-- Do not add a Render database, disk, background worker, workflow, or custom domain.
-- To guarantee that Render cannot create usage charges, do not attach a payment method. Without one,
-  Render suspends free services or builds after included usage is exhausted instead of charging.
-- Before confirming the Render Blueprint, verify that its summary shows one web service with
-  `plan: free` and no other resources.
+- Select **Hobby** in Vercel and **Free** in Neon. Do not upgrade either project or add paid extras.
+- Keep secrets only in Vercel environment variables. Never use `VITE_*` for a secret because Vite
+  compiles those values into public browser JavaScript.
+- Use Neon's **pooled** PostgreSQL connection string. Vercel instances use SQLAlchemy `NullPool` so
+  they do not create a separate process-local connection pool.
+- Scope production credentials to **Production**. For Preview deployments, use a separate Neon
+  branch and separate credentials, or leave previews disabled; do not point untrusted preview code
+  at the production database.
 
-## 1. Create the Neon database
+## 1. Prepare Neon Free
 
-1. Sign in to Neon and create a project named `space-mission-control` on the **Free** plan.
-2. Choose a region near the Render service region to reduce latency.
-3. Keep the default database and role, and copy the pooled PostgreSQL connection string.
-4. Store the connection string only in Render's `DATABASE_URL` secret field. Never commit it, put it
-   in a GitHub Actions variable, or paste it into chat or logs.
+1. In the existing Neon Free project, open **Connect** and select the production database and role.
+2. Enable **Pooled connection** and copy the resulting PostgreSQL URL. Keep all Neon TLS parameters.
+3. Choose a Vercel function region close to the Neon region when creating the Vercel project.
 
-The application accepts Neon's standard `postgresql://` URL and automatically selects the installed
-psycopg 3 driver. TLS query parameters supplied by Neon are preserved.
+The application accepts Neon's `postgresql://` URL and selects the installed psycopg 3 driver.
 
-## 2. Create the Render API
+## 2. Import the API into Vercel
 
-1. Sign in to Render and connect the GitHub repository `p1y1m/space-mission-control`.
-2. Choose **New > Blueprint**, select the repository, and use the root `render.yaml`.
-3. Verify the preview contains only `space-mission-control-api`, with instance type **Free**.
-4. Enter the Neon connection string for the prompted `DATABASE_URL` value.
-5. Confirm the Blueprint. Render generates `SECRET_KEY`; the repository supplies these non-secret
-   values:
-   - `CORS_ORIGINS=https://p1y1m.github.io`
-   - `COOKIE_SECURE=true`
-   - `ENVIRONMENT=production`
+1. In Vercel, choose **Add New > Project** and import `p1y1m/space-mission-control`.
+2. Select the **Hobby** plan.
+3. Set **Root Directory** to `backend`.
+4. Keep the detected **FastAPI** framework and default install/build settings. Do not override the
+   build command: `[tool.vercel.scripts]` in `backend/pyproject.toml` runs migrations and bounded
+   catalog seeding during the build.
+5. Add these Production environment variables before the first deployment:
 
-The container runs `alembic upgrade head` before starting Uvicorn, because Render pre-deploy commands
-are not available on Free web services. Startup also seeds the bounded demonstration catalog when the
-database is empty.
+   | Name | Value |
+   |---|---|
+   | `DATABASE_URL` | Neon pooled PostgreSQL URL (secret) |
+   | `SECRET_KEY` | A new cryptographically random value of at least 32 bytes (secret) |
+   | `CORS_ORIGINS` | `https://p1y1m.github.io` |
+   | `COOKIE_SECURE` | `true` |
+   | `ENVIRONMENT` | `production` |
 
-## 3. Verify the API
+Vercel supplies `VERCEL=1`; do not add it manually. The application deliberately rejects a Vercel
+startup that falls back to SQLite, the development signing secret, or insecure cookies.
 
-After Render provides the service URL, verify:
+The serverless entrypoint remains `app.main:app`. Framework routing sends `/health`, `/docs`, and
+all `/api/v1/*` paths to FastAPI without a catch-all rewrite. The build runs `alembic upgrade head`
+before idempotently seeding the demonstration catalog; migrations do not run on cold starts.
+
+## 3. Verify after the first deployment
+
+Replace the placeholder with the Vercel-assigned hostname:
 
 ```bash
-curl -fsS https://<render-service>.onrender.com/health
-curl -fsS https://<render-service>.onrender.com/api/v1/satellites?page_size=1
+curl -fsS https://<vercel-project>.vercel.app/health
+curl -fsS 'https://<vercel-project>.vercel.app/api/v1/satellites?page_size=1'
 ```
 
-The health response must report `"status":"ok"` and `"database":"connected"`. The first request
-after 15 minutes of inactivity can take about a minute while a Free web service wakes up.
+The health response must contain `"status":"ok"` and `"database":"connected"`. Check the first
+build log for successful Alembic revisions without copying the database URL into logs or support
+messages.
 
-## 4. Connect GitHub Pages to the API
+## 4. Connect GitHub Pages
 
-Create the public repository Actions variable below (it contains only a public API URL, never a
-secret):
+After the Vercel hostname is final, create or update this public GitHub Actions repository variable:
 
 ```text
-VITE_API_URL=https://<render-service>.onrender.com/api/v1
+VITE_API_URL=https://<vercel-project>.vercel.app/api/v1
 ```
 
-Then manually run **Deploy Frontend to GitHub Pages**. Confirm registration, login, satellite
-catalog, watchlist, missions, logout, and a direct `/space-mission-control/login` refresh.
+Re-run **Deploy Frontend to GitHub Pages**, then verify registration, login, refresh, satellite
+catalog, watchlist, missions, CSRF-protected writes, logout, and a direct route refresh. This value is
+a public URL, not a secret.
 
-## Rollback and operations
+The API exposes `X-CSRF-Token` only to the configured CORS origin. This lets the separate GitHub
+Pages site perform the existing double-submit CSRF check even though it cannot read Vercel's cookie
+directly; the session token remains HttpOnly.
 
-- Render deploys only after GitHub checks pass.
-- Database migrations are versioned in `backend/alembic/versions` and run on each container start.
-- Neon is the durable datastore; Render's local filesystem is ephemeral and stores no application
-  data.
-- Free Render services sleep after inactivity, and their first request after sleeping is expected to
-  be slow.
+## Runtime limitations
+
+- GitHub Pages and `vercel.app` are different sites. Cookies use `Secure; SameSite=None`, but a
+  browser or privacy extension that blocks third-party cookies can still block authentication. Test
+  the target browsers; a future same-site custom-domain design is the robust remedy.
+- Authentication throttling is per Vercel instance, not globally distributed. It is a useful local
+  guard, not a substitute for a shared edge/Redis rate limiter.
+- Vercel's filesystem and instances are ephemeral. Durable application data belongs only in Neon.
+- A failed migration stops the build. Review it, correct the migration or database configuration,
+  and redeploy; do not bypass migrations or edit production schema manually.

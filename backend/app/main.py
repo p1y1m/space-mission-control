@@ -48,10 +48,13 @@ def rate_limit(request: Request):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(engine)
-    with SessionLocal() as db:
-        seed_satellites(db)
-    logger.info("application_started")
+    # Local development remains zero-setup. Vercel runs migrations and seeding
+    # once during its build instead of on every serverless cold start.
+    if not settings.is_serverless:
+        Base.metadata.create_all(engine)
+        with SessionLocal() as db:
+            seed_satellites(db)
+    logger.info("application_started serverless=%s", settings.is_serverless)
     yield
 
 
@@ -59,7 +62,8 @@ app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan,
               description="Satellite catalog, private watchlists, and simulated mission planning API.")
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=True,
                    allow_methods=["GET", "POST", "PATCH", "DELETE"],
-                   allow_headers=["Content-Type", "X-CSRF-Token"])
+                   allow_headers=["Content-Type", "X-CSRF-Token"],
+                   expose_headers=["X-CSRF-Token"])
 
 
 @app.middleware("http")
@@ -71,6 +75,11 @@ async def security_and_logging(request: Request, call_next):
             return Response(content=json.dumps({"detail": "CSRF validation failed"}), status_code=403,
                             media_type="application/json")
     response = await call_next(request)
+    csrf_cookie = request.cookies.get("smc_csrf")
+    if csrf_cookie and "X-CSRF-Token" not in response.headers:
+        # The GitHub Pages origin cannot read a cookie scoped to vercel.app.
+        # CORS exposes this response header only to explicitly allowed origins.
+        response.headers["X-CSRF-Token"] = csrf_cookie
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -92,10 +101,12 @@ def health(db: Session = Depends(get_db)):
 
 def set_session(response: Response, user_id: str):
     same_site = "none" if settings.cookie_secure else "lax"
+    csrf_token = new_csrf_token()
     response.set_cookie("smc_session", create_token(user_id), httponly=True, secure=settings.cookie_secure,
                         samesite=same_site, max_age=settings.token_minutes * 60, path="/")
-    response.set_cookie("smc_csrf", new_csrf_token(), httponly=False, secure=settings.cookie_secure,
+    response.set_cookie("smc_csrf", csrf_token, httponly=False, secure=settings.cookie_secure,
                         samesite=same_site, max_age=settings.token_minutes * 60, path="/")
+    response.headers["X-CSRF-Token"] = csrf_token
 
 
 @app.post("/api/v1/auth/register", response_model=UserOut, status_code=201, dependencies=[Depends(rate_limit)])
@@ -122,6 +133,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 def logout(response: Response):
     response.delete_cookie("smc_session", path="/")
     response.delete_cookie("smc_csrf", path="/")
+    response.headers["X-CSRF-Token"] = ""
 
 
 @app.get("/api/v1/auth/me", response_model=UserOut)
