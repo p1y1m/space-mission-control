@@ -189,6 +189,8 @@ registration, catalog browsing, watchlist creation, mission creation, and core n
 | Analytics | `GET /analytics` |
 
 Interactive schemas and exact response models are available at `/docs` and `/openapi.json`.
+The API root (`GET /`) returns a small JSON deployment marker so a frontend deployment cannot be
+mistaken for the FastAPI service.
 
 ## Deployment
 

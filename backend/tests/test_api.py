@@ -3,6 +3,17 @@ from datetime import datetime, timezone
 from app.sync_celestrak import parse_tle_catalog, propagate
 
 
+def test_root_identifies_api(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json() == {
+        "service": "space-mission-control-api",
+        "status": "ok",
+        "health": "/health",
+        "docs": "/docs",
+    }
+
+
 def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200

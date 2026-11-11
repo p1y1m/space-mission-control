@@ -88,6 +88,17 @@ async def security_and_logging(request: Request, call_next):
     return response
 
 
+@app.get("/", include_in_schema=False)
+def root():
+    """Provide an unambiguous deployment probe at the project root."""
+    return {
+        "service": "space-mission-control-api",
+        "status": "ok",
+        "health": "/health",
+        "docs": "/docs",
+    }
+
+
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
     try:

@@ -48,6 +48,12 @@ The serverless entrypoint remains `app.main:app`. Framework routing sends `/heal
 all `/api/v1/*` paths to FastAPI without a catch-all rewrite. The build runs `alembic upgrade head`
 before idempotently seeding the demonstration catalog; migrations do not run on cold starts.
 
+In **Settings > Git**, confirm the connected repository is exactly
+`p1y1m/space-mission-control`, the Production Branch is `main`, and automatic deployments are not
+ignored. A connected Vercel project normally creates a deployment for every push. If the project
+shows **No Production Deployment**, reconnect/import the repository and click **Deploy** after the
+variables above are saved; merely creating an empty Vercel project does not deploy the repository.
+
 ## 3. Verify after the first deployment
 
 Replace the placeholder with the Vercel-assigned hostname:
@@ -61,6 +67,11 @@ The health response must contain `"status":"ok"` and `"database":"connected"`. C
 build log for successful Alembic revisions without copying the database URL into logs or support
 messages.
 
+Also open `/` and `/openapi.json`. They must return JSON from FastAPI. If `/health` or
+`/openapi.json` returns a Vite `index.html`, the domain points to a frontend deployment or the Vercel
+Root Directory is wrong. A `DEPLOYMENT_NOT_FOUND` response instead means the requested deployment
+URL does not exist or was deleted; verify the exact URL in the project's **Deployments** tab.
+
 ## 4. Connect GitHub Pages
 
 After the Vercel hostname is final, create or update this public GitHub Actions repository variable:
@@ -71,7 +82,16 @@ VITE_API_URL=https://<vercel-project>.vercel.app/api/v1
 
 Re-run **Deploy Frontend to GitHub Pages**, then verify registration, login, refresh, satellite
 catalog, watchlist, missions, CSRF-protected writes, logout, and a direct route refresh. This value is
-a public URL, not a secret.
+a public URL, not a secret. The Pages workflow deliberately fails if this variable is missing or is
+not an HTTPS URL ending in `/api/v1`, preventing another bundle from silently targeting
+`https://p1y1m.github.io/api/v1`.
+
+## Retrieving Vercel logs
+
+Open the Vercel project, select **Deployments**, then select the failed deployment. Expand the
+**Building** section for dependency installation, migration, and build output. After a successful
+deployment, use **Logs** or **Runtime Logs** while requesting `/health`. If there is no deployment
+row at all, there are no build logs to retrieve—the repository has not triggered a deployment.
 
 The API exposes `X-CSRF-Token` only to the configured CORS origin. This lets the separate GitHub
 Pages site perform the existing double-submit CSRF check even though it cannot read Vercel's cookie
