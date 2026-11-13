@@ -1,6 +1,11 @@
-from .conftest import register
 from datetime import datetime, timezone
+
+from fastapi import Response
+
+from app.config import settings
+from app.main import logout
 from app.sync_celestrak import parse_tle_catalog, propagate
+from .conftest import register
 
 
 def test_root_identifies_api(client):
@@ -30,6 +35,26 @@ def test_registration_login_and_invalid_credentials(client):
     client.cookies.clear()
     assert client.post("/api/v1/auth/login", json={"email": "pilot@example.com", "password": "wrong"}).status_code == 401
     assert client.post("/api/v1/auth/login", json={"email": "pilot@example.com", "password": "strong-password-123"}).status_code == 200
+
+
+def test_logout_expires_cross_site_cookies_with_matching_attributes(monkeypatch):
+    monkeypatch.setattr(settings, "cookie_secure", True)
+    response = Response()
+
+    logout(response)
+
+    cookies = [value.decode() for key, value in response.raw_headers if key == b"set-cookie"]
+    session_cookie = next(value for value in cookies if value.startswith("smc_session="))
+    csrf_cookie = next(value for value in cookies if value.startswith("smc_csrf="))
+    assert "Max-Age=0" in session_cookie
+    assert "HttpOnly" in session_cookie
+    assert "SameSite=none" in session_cookie
+    assert "Secure" in session_cookie
+    assert "Max-Age=0" in csrf_cookie
+    assert "HttpOnly" not in csrf_cookie
+    assert "SameSite=none" in csrf_cookie
+    assert "Secure" in csrf_cookie
+    assert response.headers["X-CSRF-Token"] == ""
 
 
 def test_protected_route_and_satellite_catalog(client):

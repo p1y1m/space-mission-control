@@ -142,8 +142,14 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 @app.post("/api/v1/auth/logout", status_code=204)
 def logout(response: Response):
-    response.delete_cookie("smc_session", path="/")
-    response.delete_cookie("smc_csrf", path="/")
+    same_site = "none" if settings.cookie_secure else "lax"
+    # Match the attributes used when setting the cookies. This is required by
+    # cross-site browser policies and prevents a stale secure session from
+    # surviving logout on the GitHub Pages frontend.
+    response.delete_cookie("smc_session", path="/", httponly=True,
+                           secure=settings.cookie_secure, samesite=same_site)
+    response.delete_cookie("smc_csrf", path="/", httponly=False,
+                           secure=settings.cookie_secure, samesite=same_site)
     response.headers["X-CSRF-Token"] = ""
 
 
