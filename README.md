@@ -1,6 +1,6 @@
 # Space Mission Control
 
-# Author: Pedro Yanez Melendez
+## Author: Pedro Yanez Melendez
 
 An aerospace-inspired satellite tracking and simulated mission-operations platform. The project
 combines a responsive React operations console with a security-focused FastAPI service, relational
